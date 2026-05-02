@@ -1,0 +1,8 @@
+flask
+flask-sock
+flask-limiter
+yt-dlp
+python-dotenv
+redis
+cryptography
+gunicorn
