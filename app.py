@@ -11,7 +11,8 @@ import tempfile
 import base64
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
-from flask import Flask, render_template, jsonify, request, send_file, session
+import urllib.request
+from flask import Flask, render_template, jsonify, request, send_file, session, Response
 from flask_sock import Sock
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -860,6 +861,24 @@ def get_formats():
         "video_formats": info['formats'],
         "audio_formats": info['audio_formats']
     })
+
+@app.route('/api/proxy-thumbnail')
+def proxy_thumbnail():
+    """Proxy thumbnails to bypass CORS/CORP restrictions"""
+    url = request.args.get('url')
+    if not url:
+        return "No URL provided", 400
+    
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return Response(
+                response.read(),
+                mimetype=response.headers.get_content_type() or 'image/jpeg'
+            )
+    except Exception as e:
+        print(f"[proxy] Error fetching thumbnail: {e}")
+        return "Failed to fetch thumbnail", 500
 
 @app.route('/api/play', methods=['POST'])
 @limiter.limit("20 per minute")

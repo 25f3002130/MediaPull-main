@@ -1025,12 +1025,11 @@
 
                 // Update UI
                 document.getElementById('formatTitle').textContent = data.title;
-                document.getElementById('formatThumbnail').src = data.thumbnail || '';
+                document.getElementById('formatThumbnail').src = getProxiedUrl(data.thumbnail);
 
                 // Show/hide playlist badge
                 const playlistBadge = document.getElementById('playlistBadge');
                 const singleVideoControls = document.getElementById('singleVideoControls');
-                const playlistControls = document.getElementById('playlistControls');
                 const playlistSection = document.getElementById('playlistSection');
 
                 if (data.is_playlist) {
@@ -1038,7 +1037,6 @@
                     playlistBadge.style.display = 'block';
                     playlistBadge.textContent = `📺 Playlist • ${data.video_count} videos`;
                     singleVideoControls.style.display = 'none';
-                    playlistControls.style.display = 'block';
                     playlistSection.style.display = 'block';
 
                     document.getElementById('playlistTitle').textContent = data.title;
@@ -1053,7 +1051,7 @@
                         const div = document.createElement('div');
                         div.className = 'playlist-video-item';
                         div.innerHTML = `
-                            <img class="playlist-video-thumbnail" src="${video.thumbnail || ''}" alt="">
+                            <img class="playlist-video-thumbnail" src="${getProxiedUrl(video.thumbnail)}" alt="">
                             <div class="playlist-video-info">
                                 <div class="playlist-video-title">${index + 1}. ${video.title}</div>
                                 <div class="playlist-video-meta">${video.uploader} • ${formatDuration(video.duration)}</div>
@@ -1068,7 +1066,6 @@
                     // Single video UI
                     playlistBadge.style.display = 'none';
                     singleVideoControls.style.display = 'block';
-                    playlistControls.style.display = 'none';
                     playlistSection.style.display = 'none';
 
                     document.getElementById('formatMeta').textContent = `${data.platform} • ${formatDuration(data.duration)}`;
@@ -1192,7 +1189,7 @@
                 }
 
                 if (state.thumbnail) {
-                    thumbnail.innerHTML = `<img src="${state.thumbnail}" alt="thumbnail">`;
+                    thumbnail.innerHTML = `<img src="${getProxiedUrl(state.thumbnail)}" alt="thumbnail">`;
                 }
 
                 if (state.platform && state.uploader) {
@@ -1245,6 +1242,13 @@
                 return `${hours}:${String(remainingMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
             }
             return `${mins}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function getProxiedUrl(url) {
+            if (!url) return '';
+            // Don't proxy local or relative URLs
+            if (url.startsWith('/') || url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+            return `/api/proxy-thumbnail?url=${encodeURIComponent(url)}`;
         }
 
         function showStatus(msg, type) {
