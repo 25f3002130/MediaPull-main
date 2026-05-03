@@ -1025,7 +1025,14 @@
         let isPlaylist = false;
         let playlistVideos = [];
         let selectedMainPlatform = '';
-        let isAuthenticated = false;
+        let platformStates = {
+            'youtube': { url: '', data: null, isAuthenticated: false },
+            'instagram': { url: '', data: null, isAuthenticated: false },
+            'facebook': { url: '', data: null, isAuthenticated: false },
+            'tiktok': { url: '', data: null, isAuthenticated: false },
+            'twitter': { url: '', data: null, isAuthenticated: false }
+        };
+        let currentAuthData = { authenticated: false, platforms: [] };
 
         const platformGuideData = {
             'youtube': {
@@ -1065,6 +1072,11 @@
         const inputSection = document.getElementById('inputSection');
 
         function selectMainPlatform(platform) {
+            // Save current state before switching
+            if (selectedMainPlatform) {
+                platformStates[selectedMainPlatform].url = urlInput.value;
+            }
+
             selectedMainPlatform = platform;
             
             // Update UI buttons
@@ -1072,6 +1084,10 @@
                 p.classList.toggle('active', p.dataset.platform === platform);
             });
 
+            // Restore state for the new platform
+            const state = platformStates[platform];
+            urlInput.value = state.url || '';
+            
             // Update Guide
             const guide = platformGuideData[platform];
             guideBanner.style.display = 'block';
@@ -1079,8 +1095,18 @@
             document.getElementById('guideTitle').innerHTML = guide.title;
             document.getElementById('guideText').innerHTML = guide.text;
 
+            // Restore analysis data if it exists
+            if (state.data) {
+                renderAnalysisResult(state.data);
+                formatSection.classList.add('active');
+            } else {
+                formatSection.classList.remove('active');
+                playlistSection.style.display = 'none';
+            }
+
             // Handle visibility logic
             refreshInputVisibility();
+            updateAuthUI(currentAuthData); // Refresh auth banner for this context
         }
 
         function refreshInputVisibility() {
@@ -1089,9 +1115,11 @@
                 return;
             }
 
-            if ((selectedMainPlatform === 'instagram' || selectedMainPlatform === 'facebook') && !isAuthenticated) {
+            const state = platformStates[selectedMainPlatform];
+            const isRestricted = (selectedMainPlatform === 'instagram' || selectedMainPlatform === 'facebook');
+
+            if (isRestricted && !state.isAuthenticated) {
                 inputSection.style.display = 'none';
-                // Highlight the cookie button if they need to upload
                 document.getElementById('authBanner').style.animation = 'pulse 1s infinite alternate';
                 setTimeout(() => {
                     document.getElementById('authBanner').style.animation = '';
@@ -1150,22 +1178,36 @@
                     return;
                 }
 
+                // Save data to state
+                platformStates[selectedMainPlatform].data = data;
+                renderAnalysisResult(data);
+            } catch (err) {
+                showStatus('Failed to fetch video info: ' + err.message, 'error');
+            } finally {
+                fetchBtn.disabled = false;
+            }
+        }
+
+        function renderAnalysisResult(data) {
+                // Clear sections first
+                const playlistBadge = document.getElementById('playlistBadge');
+                const singleVideoControls = document.getElementById('singleVideoControls');
+                const playlistSection = document.getElementById('playlistSection');
+                
+                playlistBadge.style.display = 'none';
+                singleVideoControls.style.display = 'none';
+                playlistSection.style.display = 'none';
+                
                 isPlaylist = data.is_playlist || false;
 
                 // Update UI
                 document.getElementById('formatTitle').textContent = data.title;
                 document.getElementById('formatThumbnail').src = getProxiedUrl(data.thumbnail);
 
-                // Show/hide playlist badge
-                const playlistBadge = document.getElementById('playlistBadge');
-                const singleVideoControls = document.getElementById('singleVideoControls');
-                const playlistSection = document.getElementById('playlistSection');
-
                 if (data.is_playlist) {
                     // Playlist UI
                     playlistBadge.style.display = 'block';
                     playlistBadge.textContent = `📺 Playlist • ${data.video_count} videos`;
-                    singleVideoControls.style.display = 'none';
                     playlistSection.style.display = 'block';
 
                     document.getElementById('playlistTitle').textContent = data.title;
@@ -1235,13 +1277,7 @@
                 }
 
                 // Show format section
-                formatSection.classList.add('active');
-
-            } catch (err) {
-                showStatus('Failed to fetch video info: ' + err.message, 'error');
-            } finally {
-                fetchBtn.disabled = false;
-            }
+                document.getElementById('formatSection').classList.add('active');
         }
 
         // Select format tab
@@ -1438,7 +1474,13 @@
             try {
                 const response = await fetch('/api/cookies/status');
                 const data = await response.json();
-                isAuthenticated = data.authenticated;
+                currentAuthData = data;
+                
+                // Update authentication state for all platforms
+                Object.keys(platformStates).forEach(p => {
+                    platformStates[p].isAuthenticated = data.platforms.some(ap => ap.toLowerCase().includes(p));
+                });
+
                 updateAuthUI(data);
                 refreshInputVisibility();
             } catch (err) {
@@ -1448,21 +1490,25 @@
 
         function updateAuthUI(data) {
             const banner = document.getElementById('authBanner');
-            const status = document.getElementById('authStatus');
+            const statusEl = document.getElementById('authStatus');
             const clearBtn = document.getElementById('clearCookieBtn');
 
-            if (data.authenticated) {
+            // Find if current platform is authenticated
+            const isCurrentAuth = selectedMainPlatform && platformStates[selectedMainPlatform].isAuthenticated;
+
+            if (isCurrentAuth) {
                 banner.classList.add('authenticated');
-                status.innerHTML = `
+                const expiry = data.expires_in || '2 hours';
+                statusEl.innerHTML = `
                     <span class="auth-icon">🔓</span>
-                    <span class="auth-text">Authenticated for: ${data.platforms.join(', ')} (${data.expires_in})</span>
+                    <span class="auth-text">Authenticated for: ${selectedMainPlatform} (${expiry})</span>
                 `;
                 clearBtn.style.display = 'block';
             } else {
                 banner.classList.remove('authenticated');
-                status.innerHTML = `
+                statusEl.innerHTML = `
                     <span class="auth-icon">🔒</span>
-                    <span class="auth-text">No authentication - member-only content unavailable</span>
+                    <span class="auth-text">${selectedMainPlatform ? selectedMainPlatform + ' ' : ''}Authentication required for advanced features</span>
                 `;
                 clearBtn.style.display = 'none';
             }

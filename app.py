@@ -226,7 +226,11 @@ def parse_error_message(error_text: str, has_cookies: bool = False) -> str:
     elif any(x in error_lower for x in ['unable to extract', 'parse']):
         return ERROR_MESSAGES['parse']
     else:
-        return 'An error occurred while processing the video'
+        # Return the actual error message but sanitized if it's too long
+        clean_error = error_msg.split('\n')[0]
+        if len(clean_error) > 100:
+            clean_error = clean_error[:97] + "..."
+        return f"Error: {clean_error}"
 
 def get_playlist_info(playlist_url: str, session_id: str = None) -> dict:
     """Extract playlist info and list of videos"""
