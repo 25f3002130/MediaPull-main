@@ -57,10 +57,63 @@
 
         .platform {
             background: rgba(255, 255, 255, 0.1);
-            padding: 6px 12px;
-            border-radius: 16px;
-            font-size: 12px;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 13px;
             color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .platform:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .platform.active {
+            background: rgba(74, 144, 217, 0.2);
+            border-color: #4a90d9;
+            color: #fff;
+        }
+
+        .platform.active[data-platform="instagram"], 
+        .platform.active[data-platform="facebook"] {
+            border-color: #e94560;
+            background: rgba(233, 69, 96, 0.2);
+        }
+
+        .guide-banner {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4a90d9;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .guide-banner.youtube { border-color: #ff0000; }
+        .guide-banner.instagram { border-color: #e1306c; }
+        .guide-banner.warning { border-color: #ffd93d; }
+
+        .guide-title {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .guide-text {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            line-height: 1.4;
         }
 
         .input-section {
@@ -771,13 +824,20 @@
         <h1>MediaPull</h1>
         <p class="subtitle">Universal Media Extraction Platform</p>
 
-        <div class="platforms">
-            <span class="platform">📺 YouTube</span>
-            <span class="platform">📸 Instagram</span>
-            <span class="platform">🎵 TikTok</span>
-            <span class="platform">🐦 Twitter/X</span>
-            <span class="platform">📘 Facebook</span>
+        <div class="platforms" id="platformSelector">
+            <div class="platform" data-platform="youtube" onclick="selectMainPlatform('youtube')">📺 YouTube</div>
+            <div class="platform" data-platform="instagram" onclick="selectMainPlatform('instagram')">📸 Instagram</div>
+            <div class="platform" data-platform="facebook" onclick="selectMainPlatform('facebook')">📘 Facebook</div>
+            <div class="platform" data-platform="tiktok" onclick="selectMainPlatform('tiktok')">🎵 TikTok</div>
+            <div class="platform" data-platform="twitter" onclick="selectMainPlatform('twitter')">🐦 X / Twitter</div>
         </div>
+
+        <div class="guide-banner" id="guideBanner">
+            <div class="guide-title" id="guideTitle"></div>
+            <div class="guide-text" id="guideText"></div>
+        </div>
+
+
 
         <!-- Cookie Authentication Banner -->
         <div class="auth-banner" id="authBanner">
@@ -795,7 +855,7 @@
             </div>
         </div>
 
-        <div class="input-section">
+        <div class="input-section" id="inputSection" style="display: none;">
             <input type="text" id="urlInput" placeholder="Paste video URL from any supported platform...">
             <button class="fetch-btn" id="fetchBtn" onclick="fetchFormats()">
                 🔍 Analyze URL
@@ -956,7 +1016,6 @@
     </div>
 
     <script>
-        // State
         let currentUrl = '';
         let selectedFormat = 'video';
         let selectedQuality = 'best';
@@ -965,6 +1024,36 @@
         let ws;
         let isPlaylist = false;
         let playlistVideos = [];
+        let selectedMainPlatform = '';
+        let isAuthenticated = false;
+
+        const platformGuideData = {
+            'youtube': {
+                title: '📺 YouTube Mode',
+                text: 'Paste any YouTube link to analyze. <strong>Tip:</strong> To download Member-only or age-restricted videos, please upload your cookies using the button above.',
+                class: 'youtube'
+            },
+            'instagram': {
+                title: '📸 Instagram Mode',
+                text: 'Instagram requires authentication to download videos reliably. <strong>Please upload your Instagram cookies</strong> using the button above to unlock the downloader.',
+                class: 'instagram'
+            },
+            'facebook': {
+                title: '📘 Facebook Mode',
+                text: 'Facebook often blocks server requests. Please <strong>submit your Facebook cookies</strong> first to ensure downloads work correctly.',
+                class: 'instagram'
+            },
+            'tiktok': {
+                title: '🎵 TikTok Mode',
+                text: 'Paste a TikTok link to extract video. No cookies required for most public content.',
+                class: 'warning'
+            },
+            'twitter': {
+                title: '🐦 X / Twitter Mode',
+                text: 'Paste an X/Twitter link. Public videos work immediately; private content requires cookies.',
+                class: 'warning'
+            }
+        };
 
         // Elements
         const urlInput = document.getElementById('urlInput');
@@ -972,10 +1061,50 @@
         const formatSection = document.getElementById('formatSection');
         const playBtn = document.getElementById('playBtn');
         const status = document.getElementById('status');
+        const guideBanner = document.getElementById('guideBanner');
+        const inputSection = document.getElementById('inputSection');
+
+        function selectMainPlatform(platform) {
+            selectedMainPlatform = platform;
+            
+            // Update UI buttons
+            document.querySelectorAll('.platform').forEach(p => {
+                p.classList.toggle('active', p.dataset.platform === platform);
+            });
+
+            // Update Guide
+            const guide = platformGuideData[platform];
+            guideBanner.style.display = 'block';
+            guideBanner.className = `guide-banner ${guide.class}`;
+            document.getElementById('guideTitle').innerHTML = guide.title;
+            document.getElementById('guideText').innerHTML = guide.text;
+
+            // Handle visibility logic
+            refreshInputVisibility();
+        }
+
+        function refreshInputVisibility() {
+            if (!selectedMainPlatform) {
+                inputSection.style.display = 'none';
+                return;
+            }
+
+            if ((selectedMainPlatform === 'instagram' || selectedMainPlatform === 'facebook') && !isAuthenticated) {
+                inputSection.style.display = 'none';
+                // Highlight the cookie button if they need to upload
+                document.getElementById('authBanner').style.animation = 'pulse 1s infinite alternate';
+                setTimeout(() => {
+                    document.getElementById('authBanner').style.animation = '';
+                }, 3000);
+            } else {
+                inputSection.style.display = 'block';
+            }
+        }
 
         // WebSocket connection
         function connectWebSocket() {
-            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
             ws.onmessage = (event) => {
                 const state = JSON.parse(event.data);
@@ -1309,7 +1438,9 @@
             try {
                 const response = await fetch('/api/cookies/status');
                 const data = await response.json();
+                isAuthenticated = data.authenticated;
                 updateAuthUI(data);
+                refreshInputVisibility();
             } catch (err) {
                 console.error('Failed to check cookie status:', err);
             }
@@ -1440,11 +1571,13 @@
 
                 if (data.success) {
                     showStatus(data.message, 'success');
+                    isAuthenticated = true;
                     updateAuthUI({
                         authenticated: true,
                         platforms: data.platforms,
                         expires_in: data.expires_in
                     });
+                    refreshInputVisibility();
                     closeCookieModal();
                 } else {
                     showStatus(data.error || 'Upload failed', 'error');
@@ -1464,7 +1597,9 @@
 
                 if (data.success) {
                     showStatus('Cookies cleared', 'success');
+                    isAuthenticated = false;
                     updateAuthUI({ authenticated: false });
+                    refreshInputVisibility();
                 }
             } catch (err) {
                 showStatus('Failed to clear cookies', 'error');
